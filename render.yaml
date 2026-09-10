@@ -1,0 +1,27 @@
+services:
+  - type: cron
+    name: esoterix-shopify-sync
+    runtime: python
+    plan: free
+    branch: main
+    
+    # Commandes de build et démarrage
+    buildCommand: pip install -r requirements.txt
+    startCommand: python esoterix_shopify_sync.py
+    
+    # Schedule: Chaque semaine lundi à 2h du matin (UTC)
+    # Format cron: minute heure jour mois jour_semaine
+    # 0 2 * * 0 = Chaque dimanche à 2h
+    # 0 2 * * 1 = Chaque lundi à 2h
+    schedule: "0 2 * * 0"
+    
+    # Variables d'environnement (à remplir dans le dashboard Render)
+    envVars:
+      - key: ESOTERIX_EMAIL
+        sync: false
+      - key: ESOTERIX_PASSWORD
+        sync: false
+      - key: SHOPIFY_STORE
+        sync: false
+      - key: SHOPIFY_ACCESS_TOKEN
+        sync: false
