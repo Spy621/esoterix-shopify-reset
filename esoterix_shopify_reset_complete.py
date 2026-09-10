@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-🔥 RESET COMPLET SHOPIFY - VERSION SIMPLIFIÉE
+🔥 RESET COMPLET SHOPIFY - ESOTERIX (CLIENT CREDENTIALS GRANT)
+Obtient le token automatiquement via Client Credentials Grant
 Sauvegarde → Supprime tous les produits → Recrée proprement depuis Esoterix
-⚠️ SUPPRESSION AUTOMATIQUE (pas de confirmation interactive)
 """
 
 import os
@@ -30,82 +30,44 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-class ShopifyBackup:
-    """Sauvegarde les produits Shopify avant suppression"""
+class ShopifyAuth:
+    """Obtient un access token via Client Credentials Grant"""
     
-    def __init__(self, shop_name: str, access_token: str):
+    def __init__(self, shop_name: str, client_id: str, client_secret: str):
         self.shop_name = shop_name
-        self.access_token = access_token
-        self.api_url = f"https://{shop_name}.myshopify.com/admin/api/2024-01"
-        self.headers = {
-            "X-Shopify-Access-Token": access_token,
-            "Content-Type": "application/json"
-        }
+        self.client_id = client_id
+        self.client_secret = client_secret
+        self.token_url = f"https://{shop_name}.myshopify.com/admin/oauth/access_token"
     
-    def backup_all_products(self) -> str:
-        """Exporte tous les produits en CSV"""
+    def get_access_token(self) -> Optional[str]:
+        """Obtient un access token via Client Credentials Grant"""
         try:
-            logger.info("💾 SAUVEGARDE EN COURS...")
+            logger.info("🔐 Obtention du token via Client Credentials Grant...")
             
-            products = []
-            limit = 250
-            after = None
-            total = 0
+            data = {
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+                "grant_type": "client_credentials"
+            }
             
-            while True:
-                params = {"limit": limit}
-                if after:
-                    params["after"] = after
-                
-                response = requests.get(
-                    f"{self.api_url}/products.json",
-                    headers=self.headers,
-                    params=params
-                )
-                
-                if response.status_code != 200:
-                    logger.error(f"❌ Erreur API: {response.text}")
-                    break
-                
-                data = response.json()
-                batch_products = data.get('products', [])
-                products.extend(batch_products)
-                total = len(products)
-                
-                logger.info(f"📊 {total} produits téléchargés...")
-                
-                if len(batch_products) < limit:
-                    break
-                
-                # Pagination
-                last_product = batch_products[-1]
-                after = last_product.get('id')
+            response = requests.post(self.token_url, data=data)
             
-            # Sauvegarder en CSV
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"backup_shopify_{self.shop_name}_{timestamp}.csv"
+            if response.status_code != 200:
+                logger.error(f"❌ Erreur obtention token: {response.text}")
+                return None
             
-            with open(filename, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=['id', 'title', 'handle', 'vendor', 'type', 'images_count', 'variants_count'])
-                writer.writeheader()
-                
-                for product in products:
-                    writer.writerow({
-                        'id': product.get('id'),
-                        'title': product.get('title'),
-                        'handle': product.get('handle'),
-                        'vendor': product.get('vendor'),
-                        'type': product.get('product_type'),
-                        'images_count': len(product.get('images', [])),
-                        'variants_count': len(product.get('variants', []))
-                    })
+            token_data = response.json()
+            access_token = token_data.get('access_token')
             
-            logger.info(f"✅ SAUVEGARDE COMPLÈTE: {filename}")
-            logger.info(f"📊 Total: {total} produits sauvegardés")
-            return filename
+            if access_token:
+                logger.info("✅ Token obtenu avec succès!")
+                return access_token
+            else:
+                logger.error(f"❌ Pas de token dans la réponse: {token_data}")
+                return None
         
         except Exception as e:
-            logger.error(f"❌ Erreur sauvegarde: {e}")
+            logger.error(f"❌ Erreur Client Credentials Grant: {e}")
             return None
 
 
@@ -546,27 +508,34 @@ def main():
     esoterix_email = os.getenv('ESOTERIX_EMAIL')
     esoterix_password = os.getenv('ESOTERIX_PASSWORD')
     shopify_store = os.getenv('SHOPIFY_STORE')
-    shopify_token = os.getenv('SHOPIFY_ACCESS_TOKEN')
+    shopify_client_id = os.getenv('SHOPIFY_CLIENT_ID')
+    shopify_client_secret = os.getenv('SHOPIFY_CLIENT_SECRET')
     
-    if not all([esoterix_email, esoterix_password, shopify_store, shopify_token]):
+    if not all([esoterix_email, esoterix_password, shopify_store, shopify_client_id, shopify_client_secret]):
         logger.error("❌ Variables d'environnement manquantes")
         return
     
     logger.info("="*70)
-    logger.info("🔥 RESET COMPLET SHOPIFY - ESOTERIX (VERSION SIMPLIFIÉE)")
+    logger.info("🔥 RESET COMPLET SHOPIFY - ESOTERIX (CLIENT CREDENTIALS GRANT)")
     logger.info("="*70)
     
-    # Phase 1: SAUVEGARDE
-    backup = ShopifyBackup(shopify_store, shopify_token)
-    backup_file = backup.backup_all_products()
+    # Phase 0: OBTENIR LE TOKEN
+    logger.info("\n🔐 PHASE 0: OBTENTION DU TOKEN")
+    auth = ShopifyAuth(shopify_store, shopify_client_id, shopify_client_secret)
+    access_token = auth.get_access_token()
     
-    if not backup_file:
-        logger.error("❌ Sauvegarde échouée. Opération annulée.")
+    if not access_token:
+        logger.error("❌ Impossible d'obtenir le token. Opération annulée.")
         return
     
-    # Phase 2: SUPPRESSION (AUTOMATIQUE)
-    logger.info("\n🗑️  SUPPRESSION AUTOMATIQUE (pas de confirmation)")
-    deleter = ShopifyDeleter(shopify_store, shopify_token)
+    logger.info(f"✅ Token obtenu: {access_token[:20]}...")
+    
+    # Phase 1: SUPPRESSION
+    logger.info("\n" + "="*70)
+    logger.info("🗑️  PHASE 1: SUPPRESSION DES PRODUITS")
+    logger.info("="*70 + "\n")
+    
+    deleter = ShopifyDeleter(shopify_store, access_token)
     if not deleter.delete_all_products():
         logger.error("❌ Suppression échouée")
         return
@@ -574,9 +543,9 @@ def main():
     logger.info("✅ Tous les produits supprimés")
     time.sleep(5)
     
-    # Phase 3: SCRAPING ESOTERIX
+    # Phase 2: SCRAPING ESOTERIX
     logger.info("\n" + "="*70)
-    logger.info("📥 SCRAPING ESOTERIX")
+    logger.info("📥 PHASE 2: SCRAPING ESOTERIX")
     logger.info("="*70 + "\n")
     
     scraper = EsotrixScraper(esoterix_email, esoterix_password)
@@ -586,23 +555,22 @@ def main():
         logger.error("❌ Aucun produit scrapé")
         return
     
-    # Phase 4: RECRÉATION
+    # Phase 3: RECRÉATION
     logger.info("\n" + "="*70)
-    logger.info("✨ RECRÉATION DANS SHOPIFY")
+    logger.info("✨ PHASE 3: RECRÉATION DANS SHOPIFY")
     logger.info("="*70 + "\n")
     
-    recreator = ShopifyRecreator(shopify_store, shopify_token)
+    recreator = ShopifyRecreator(shopify_store, access_token)
     stats = recreator.recreate_all(products)
     
     # Résumé final
     logger.info("\n" + "="*70)
     logger.info("📊 RÉSUMÉ FINAL")
     logger.info("="*70)
-    logger.info(f"✅ Sauvegarde: {backup_file}")
     logger.info(f"🗑️  Supprimés: {deleter.deleted_count} produits")
     logger.info(f"📥 Scrapés: {len(products)} produits Esoterix")
     logger.info(f"✨ Créés: {stats['created']} produits")
-    logger.info("✅ Sauvegarde skippée (vous avez le CSV manuel)")
+    logger.info(f"❌ Échoués: {stats['failed']} produits")
     logger.info("="*70)
     logger.info("✅ RESET COMPLET TERMINÉ!")
 
