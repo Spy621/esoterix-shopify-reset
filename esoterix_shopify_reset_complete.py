@@ -470,7 +470,7 @@ Produit importé directement, garantissant l'authenticité et la qualité.
                 product['category']
             )
             
-            shopify_price = product['price'] * 4
+            shopify_price = product['price'] * 2.5
             
             product_data = {
                 "product": {
