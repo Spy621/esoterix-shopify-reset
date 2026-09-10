@@ -602,7 +602,7 @@ def main():
     logger.info(f"🗑️  Supprimés: {deleter.deleted_count} produits")
     logger.info(f"📥 Scrapés: {len(products)} produits Esoterix")
     logger.info(f"✨ Créés: {stats['created']} produits")
-    logger.info(f"❌ Échoués: {stats['failed']} produits")
+    logger.info("✅ Sauvegarde skippée (vous avez le CSV manuel)")
     logger.info("="*70)
     logger.info("✅ RESET COMPLET TERMINÉ!")
 
